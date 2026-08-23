@@ -1,9 +1,9 @@
 package com.mothakrati.app
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -11,7 +11,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -23,9 +22,11 @@ import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("rooh_prefs", 0) }
+    private var currentScreen = "HOME" // "HOME", "SECTION", "EDITOR"
     private var section = "german"
+    private var editIndex = -1
     private var selectedImageUri: String? = null
-    private var imagePreviewInDialog: ImageView? = null
+    private var imagePreview: ImageView? = null
 
     private val titles = mapOf(
         "german" to "🇩🇪 الألمانية",
@@ -34,216 +35,350 @@ class MainActivity : ComponentActivity() {
         "ideas" to "💡 أفكاري"
     )
 
-    // أداة اختيار صور الملاحظات
     private val imagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             selectedImageUri = it.toString()
-            imagePreviewInDialog?.setImageURI(it)
-            imagePreviewInDialog?.visibility = View.VISIBLE
-        }
-    }
-
-    // أداة اختيار أيقونة البرنامج
-    private val appIconPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            prefs.edit().putString("custom_app_icon", it.toString()).apply()
-            show()
-        }
-    }
-
-    // أداة اختيار خلفية التطبيق
-    private val bgPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            prefs.edit().putString("custom_bg", it.toString()).apply()
-            show()
+            imagePreview?.setImageURI(it)
+            imagePreview?.visibility = View.VISIBLE
         }
     }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        show()
+        render()
     }
 
-    private fun show() {
+    override fun onBackPressed() {
+        if (currentScreen != "HOME") {
+            currentScreen = if (currentScreen == "EDITOR") "SECTION" else "HOME"
+            render()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun render() {
+        when (currentScreen) {
+            "HOME" -> showHomeScreen()
+            "SECTION" -> showSectionScreen()
+            "EDITOR" -> showEditorScreen()
+        }
+    }
+
+    // --- 1. الشاشة الرئيسية (قائمة الأقسام عمودياً) ---
+    private fun showHomeScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            
-            // تطبيق الخلفية المختارة إذا وجدت
-            val bgUri = prefs.getString("custom_bg", null)
-            if (!bgUri.isNullOrEmpty()) {
-                try {
-                    val bgView = ImageView(this@MainActivity).apply {
-                        setImageURI(Uri.parse(bgUri))
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                    }
-                    // ملاحظة: لو حابب تخليه خلفية بسيطة، نقدر نعتمد على اللون أو نضع الصورة كخلفية رئيسية
-                } catch (e: Exception) {}
-            }
-            setBackgroundColor(Color.rgb(20, 20, 20))
+            setPadding(32, 40, 32, 32)
+            backgroundColor = Color.WHITE
         }
 
-        // رأس التطبيق مع الأيقونة المخصصة
-        val headerLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(16, 16, 16, 16)
-            gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(35, 35, 35))
-                cornerRadius = 16f
-            }
+        val titleText = TextView(this).apply {
+            text = "تطبيق روح - ROOH"
+            textSize = 26f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1F2937"))
+            gravity = Gravity.CENTER
+            setPadding(0, 20, 0, 40)
         }
+        root.addView(titleText)
 
-        // عرض الأيقونة (إما المخصصة أو الحرف الافتراضي R)
-        val customIconUri = prefs.getString("custom_app_icon", null)
-        if (!customIconUri.isNullOrEmpty()) {
-            val iconImg = ImageView(this).apply {
-                setImageURI(Uri.parse(customIconUri))
-                layoutParams = LinearLayout.LayoutParams(110, 110).apply { setMargins(0, 0, 16, 0) }
-                scaleType = ImageView.ScaleType.CENTER_CROP
-            }
-            headerLayout.addView(iconImg)
-        } else {
-            val appIcon = TextView(this).apply {
-                text = "R"
-                textSize = 22f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(Color.rgb(103, 58, 183))
-                }
-                layoutParams = LinearLayout.LayoutParams(100, 100).apply { setMargins(0, 0, 16, 0) }
-            }
-            headerLayout.addView(appIcon)
+        val subTitle = TextView(this).apply {
+            text = "اختر القسم للمتابعة:"
+            textSize = 16f
+            setTextColor(Color.parseColor("#4B5563"))
+            setPadding(8, 0, 8, 16)
         }
-
-        val textLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
-        val headText = TextView(this).apply {
-            text = "rooh - تطبيق روح"
-            textSize = 18f
-            setTextColor(Color.WHITE)
-        }
-        textLayout.addView(headText)
-        headerLayout.addView(textLayout)
-
-        // زر تغيير الأيقونة والخلفية من داخل الواجهة
-        val settingsLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val changeIconBtn = Button(this).apply {
-            text = "🖼️ الأيقونة"
-            textSize = 11f
-            setOnClickListener { appIconPicker.launch("image/*") }
-        }
-        val changeBgBtn = Button(this).apply {
-            text = "🎨 الخلفية"
-            textSize = 11f
-            setOnClickListener { bgPicker.launch("image/*") }
-        }
-        settingsLayout.addView(changeIconBtn)
-        settingsLayout.addView(changeBgBtn)
-        headerLayout.addView(settingsLayout)
-
-        root.addView(headerLayout)
-
-        val nav = HorizontalScrollView(this)
-        val row = LinearLayout(this)
-        titles.forEach { (k, v) ->
-            val x = Button(this).apply {
-                text = v
-                setOnClickListener {
-                    section = k
-                    show()
-                }
-            }
-            row.addView(x)
-        }
-        nav.addView(row)
-        root.addView(nav)
-
-        val add = Button(this).apply {
-            text = if (section == "work") "➕ إضافة وصفة" else "➕ إضافة ملاحظة"
-            setOnClickListener { editor(-1) }
-        }
-        root.addView(add)
+        root.addView(subTitle)
 
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val q = EditText(this).apply { hint = "🔎 بحث في الملاحظات..." }
-        root.addView(q)
-
-        val items = load()
-        items.forEachIndexed { idx, o ->
-            if (o.toString().contains(q.text.toString(), true)) {
-                val card = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(16, 16, 16, 16)
-                    background = GradientDrawable().apply {
-                        setColor(Color.rgb(245, 245, 245))
-                        cornerRadius = 12f
-                    }
+        titles.forEach { (key, label) ->
+            val btn = Button(this).apply {
+                text = label
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#6366F1"))
+                    cornerRadius = 20f
                 }
-
-                val cardParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 10, 0, 10) }
-                card.layoutParams = cardParams
-
-                val t = TextView(this).apply {
-                    text = o.optString("title")
-                    textSize = 19f
-                    setTextColor(Color.BLACK)
+                setPadding(24, 24, 24, 24)
+                setOnClickListener {
+                    section = key
+                    currentScreen = "SECTION"
+                    render()
                 }
-                card.addView(t)
-
-                val imgUriStr = o.optString("imageUri")
-                if (imgUriStr.isNotEmpty()) {
-                    val imgView = ImageView(this).apply {
-                        setImageURI(Uri.parse(imgUriStr))
-                        adjustViewBounds = true
-                        maxHeight = 400
-                        setPadding(0, 8, 0, 8)
-                    }
-                    card.addView(imgView)
-                }
-
-                val body = TextView(this).apply {
-                    text = if (section == "work") {
-                        "المكونات:\n${o.optString("ingredients")}\n\nطريقة التحضير:\n${o.optString("body")}"
-                    } else {
-                        o.optString("body")
-                    }
-                    setTextColor(Color.DKGRAY)
-                }
-                card.addView(body)
-
-                val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-                val e = Button(this).apply {
-                    text = "✏️ تعديل"
-                    setOnClickListener { editor(idx) }
-                }
-                val d = Button(this).apply {
-                    text = "🗑️ حذف"
-                    setOnClickListener {
-                        val currentList = load()
-                        if (idx < currentList.size) {
-                            currentList.removeAt(idx)
-                            save(currentList)
-                            show()
-                        }
-                    }
-                }
-                actions.addView(e)
-                actions.addView(d)
-                card.addView(actions)
-                list.addView(card)
             }
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 12, 0, 12) }
+            btn.layoutParams = params
+            list.addView(btn)
         }
 
         root.addView(ScrollView(this).apply { addView(list) })
         setContentView(root)
+    }
+
+    // --- 2. صفحة القسم (عرض الملاحظات والبحث) ---
+    private fun showSectionScreen() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+            backgroundColor = Color.WHITE
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, 16)
+        }
+
+        val backBtn = Button(this).apply {
+            text = "⬅️ عودة"
+            setOnClickListener {
+                currentScreen = "HOME"
+                render()
+            }
+        }
+        header.addView(backBtn)
+
+        val title = TextView(this).apply {
+            text = titles[section]
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#111827"))
+            setPadding(20, 0, 0, 0)
+        }
+        header.addView(title)
+        root.addView(header)
+
+        val addBtn = Button(this).apply {
+            text = if (section == "work") "➕ إضافة وصفة جديدة" else "➕ إضافة ملاحظة جديدة"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#10B981"))
+                cornerRadius = 16f
+            }
+            setOnClickListener {
+                editIndex = -1
+                selectedImageUri = null
+                currentScreen = "EDITOR"
+                render()
+            }
+        }
+        root.addView(addBtn)
+
+        val searchBox = EditText(this).apply {
+            hint = "🔎 بحث داخل الملاحظات..."
+            setPadding(20, 20, 20, 20)
+            setTextColor(Color.BLACK)
+            setHintTextColor(Color.GRAY)
+        }
+        root.addView(searchBox)
+
+        val listContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val items = load()
+
+        fun updateList(query: String) {
+            listContainer.removeAllViews()
+            items.forEachIndexed { idx, o ->
+                if (o.toString().contains(query, true)) {
+                    val card = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(20, 20, 20, 20)
+                        background = GradientDrawable().apply {
+                            setColor(Color.parseColor("#F3F4F6"))
+                            cornerRadius = 16f
+                        }
+                    }
+                    val cardParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { setMargins(0, 12, 0, 12) }
+                    card.layoutParams = cardParams
+
+                    val itemTitle = TextView(this).apply {
+                        text = o.optString("title")
+                        textSize = 20f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(Color.parseColor("#1F2937"))
+                    }
+                    card.addView(itemTitle)
+
+                    val imgUriStr = o.optString("imageUri")
+                    if (imgUriStr.isNotEmpty()) {
+                        val imgView = ImageView(this).apply {
+                            setImageURI(Uri.parse(imgUriStr))
+                            adjustViewBounds = true
+                            maxHeight = 450
+                            setPadding(0, 12, 0, 12)
+                        }
+                        card.addView(imgView)
+                    }
+
+                    val body = TextView(this).apply {
+                        text = if (section == "work") {
+                            "المكونات:\n${o.optString("ingredients")}\n\nطريقة التحضير:\n${o.optString("body")}"
+                        } else {
+                            o.optString("body")
+                        }
+                        textSize = 15f
+                        setTextColor(Color.parseColor("#374151"))
+                    }
+                    card.addView(body)
+
+                    val actions = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        setPadding(0, 12, 0, 0)
+                    }
+                    val editBtn = Button(this).apply {
+                        text = "✏️ تعديل"
+                        setOnClickListener {
+                            editIndex = idx
+                            selectedImageUri = o.optString("imageUri", null)
+                            currentScreen = "EDITOR"
+                            render()
+                        }
+                    }
+                    val delBtn = Button(this).apply {
+                        text = "🗑️ حذف"
+                        setOnClickListener {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle("حذف")
+                                .setMessage("هل أنت تأكد من الحذف؟")
+                                .setPositiveButton("نعم") { _, _ ->
+                                    items.removeAt(idx)
+                                    save(items)
+                                    render()
+                                }
+                                .setNegativeButton("إلغاء", null)
+                                .show()
+                        }
+                    }
+                    actions.addView(editBtn)
+                    actions.addView(delBtn)
+                    card.addView(actions)
+                    listContainer.addView(card)
+                }
+            }
+        }
+
+        updateList("")
+        searchBox.setOnKeyListener { _, _, _ ->
+            updateList(searchBox.text.toString())
+            false
+        }
+
+        root.addView(ScrollView(this).apply { addView(listContainer) })
+        setContentView(root)
+    }
+
+    // --- 3. صفحة الإضافة والتعديل المخصصة ---
+    private fun showEditorScreen() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+            backgroundColor = Color.WHITE
+        }
+
+        val items = load()
+        val old = if (editIndex >= 0 && editIndex < items.size) items[editIndex] else JSONObject()
+
+        val headerText = TextView(this).apply {
+            text = if (editIndex < 0) "كتابة ملاحظة جديدة" else "تعديل الملاحظة"
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#111827"))
+            setPadding(0, 0, 0, 24)
+        }
+        root.addView(headerText)
+
+        val titleInput = EditText(this).apply {
+            hint = "العنوان الرئيسي"
+            setText(old.optString("title"))
+            setPadding(20, 20, 20, 20)
+            setTextColor(Color.BLACK)
+        }
+        root.addView(titleInput)
+
+        val ingInput = EditText(this).apply {
+            hint = "المكونات (للوصفات)"
+            setText(old.optString("ingredients"))
+            setPadding(20, 20, 20, 20)
+            setTextColor(Color.BLACK)
+            if (section != "work") visibility = View.GONE
+        }
+        root.addView(ingInput)
+
+        val bodyInput = EditText(this).apply {
+            hint = if (section == "work") "طريقة التحضير التفصيلية" else "أدخل نص الملاحظة هنا..."
+            setMinLines(5)
+            setText(old.optString("body"))
+            setPadding(20, 20, 20, 20)
+            setTextColor(Color.BLACK)
+        }
+        root.addView(bodyInput)
+
+        imagePreview = ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = 350
+            if (!selectedImageUri.isNullOrEmpty()) {
+                setImageURI(Uri.parse(selectedImageUri))
+                visibility = View.VISIBLE
+            } else {
+                visibility = View.GONE
+            }
+        }
+        root.addView(imagePreview)
+
+        val pickImgBtn = Button(this).apply {
+            text = "🖼️ إرفاق صورة من المعرض"
+            setOnClickListener { imagePicker.launch("image/*") }
+        }
+        root.addView(pickImgBtn)
+
+        val actionsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 24, 0, 0)
+        }
+
+        val saveBtn = Button(this).apply {
+            text = "💾 حفظ"
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#2563EB"))
+                cornerRadius = 16f
+            }
+            setOnClickListener {
+                val o = JSONObject().apply {
+                    put("title", titleInput.text.toString())
+                    put("ingredients", ingInput.text.toString())
+                    put("body", bodyInput.text.toString())
+                    put("imageUri", selectedImageUri ?: "")
+                }
+                if (editIndex < 0) items.add(0, o) else if (editIndex < items.size) items[editIndex] = o
+                save(items)
+                currentScreen = "SECTION"
+                render()
+            }
+        }
+
+        val cancelBtn = Button(this).apply {
+            text = "❌ إلغاء"
+            setOnClickListener {
+                currentScreen = "SECTION"
+                render()
+            }
+        }
+
+        actionsLayout.addView(saveBtn)
+        actionsLayout.addView(cancelBtn)
+        root.addView(actionsLayout)
+
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
     private fun load(): MutableList<JSONObject> {
@@ -255,72 +390,5 @@ class MainActivity : ComponentActivity() {
         val a = JSONArray()
         list.forEach { a.put(it) }
         prefs.edit().putString(section, a.toString()).apply()
-    }
-
-    private fun editor(index: Int) {
-        val a = load()
-        val old = if (index >= 0 && index < a.size) a[index] else JSONObject()
-        selectedImageUri = old.optString("imageUri", null)
-
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 10, 24, 10)
-        }
-
-        val title = EditText(this).apply {
-            hint = "العنوان"
-            setText(old.optString("title"))
-        }
-        box.addView(title)
-
-        val ing = EditText(this).apply {
-            hint = "المكونات (للوصفات)"
-            setText(old.optString("ingredients"))
-            if (section != "work") visibility = View.GONE
-        }
-        box.addView(ing)
-
-        val body = EditText(this).apply {
-            hint = if (section == "work") "طريقة التحضير" else "ماذا استفدت؟ / الملاحظات"
-            setMinLines(4)
-            setText(old.optString("body"))
-        }
-        box.addView(body)
-
-        imagePreviewInDialog = ImageView(this).apply {
-            adjustViewBounds = true
-            maxHeight = 300
-            if (!selectedImageUri.isNullOrEmpty()) {
-                setImageURI(Uri.parse(selectedImageUri))
-                visibility = View.VISIBLE
-            } else {
-                visibility = View.GONE
-            }
-        }
-        box.addView(imagePreviewInDialog)
-
-        val pickImgBtn = Button(this).apply {
-            text = "🖼️ إرفاق صورة بالملاحظة"
-            setOnClickListener { imagePicker.launch("image/*") }
-        }
-        box.addView(pickImgBtn)
-
-        AlertDialog.Builder(this)
-            .setTitle(if (index < 0) "إضافة ملاحظة جديدة" else "تعديل الملاحظة")
-            .setView(box)
-            .setPositiveButton("حفظ") { _, _ ->
-                val o = JSONObject().apply {
-                    put("title", title.text.toString())
-                    put("ingredients", ing.text.toString())
-                    put("body", body.text.toString())
-                    put("imageUri", selectedImageUri ?: "")
-                }
-
-                if (index < 0) a.add(0, o) else if (index < a.size) a[index] = o
-                save(a)
-                show()
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
     }
 }
