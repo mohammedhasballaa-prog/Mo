@@ -22,7 +22,7 @@ import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("rooh_prefs", 0) }
-    private var currentScreen = "HOME" // "HOME", "SECTION", "EDITOR"
+    private var currentScreen = "HOME"
     private var section = "german"
     private var editIndex = -1
     private var selectedImageUri: String? = null
@@ -49,15 +49,6 @@ class MainActivity : ComponentActivity() {
         render()
     }
 
-    override fun onBackPressed() {
-        if (currentScreen != "HOME") {
-            currentScreen = if (currentScreen == "EDITOR") "SECTION" else "HOME"
-            render()
-        } else {
-            super.onBackPressed()
-        }
-    }
-
     private fun render() {
         when (currentScreen) {
             "HOME" -> showHomeScreen()
@@ -66,12 +57,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- 1. الشاشة الرئيسية (قائمة الأقسام عمودياً) ---
+    // --- 1. الشاشة الرئيسية (عمودية) ---
     private fun showHomeScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 40, 32, 32)
-            backgroundColor = Color.WHITE
+            setBackgroundColor(Color.WHITE)
         }
 
         val titleText = TextView(this).apply {
@@ -121,12 +112,12 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
-    // --- 2. صفحة القسم (عرض الملاحظات والبحث) ---
+    // --- 2. صفحة القسم المستقلة ---
     private fun showSectionScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
-            backgroundColor = Color.WHITE
+            setBackgroundColor(Color.WHITE)
         }
 
         val header = LinearLayout(this).apply {
@@ -276,12 +267,12 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
-    // --- 3. صفحة الإضافة والتعديل المخصصة ---
+    // --- 3. صفحة الكتابة والتعديل المستقلة ---
     private fun showEditorScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
-            backgroundColor = Color.WHITE
+            setBackgroundColor(Color.WHITE)
         }
 
         val items = load()
