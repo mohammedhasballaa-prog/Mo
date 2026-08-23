@@ -1,7 +1,4 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-}
-android { namespace="com.mothakrati.app"; compileSdk=35
-    defaultConfig { applicationId="com.mothakrati.app"; minSdk=26; targetSdk=35; versionCode=1; versionName="1.0" }
+    id("com.android.application") version "8.9.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.1.10" apply false
 }
